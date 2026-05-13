@@ -1,0 +1,1016 @@
+# LABES indicator specification — single source of truth for labes_enrich.
+#
+# Naming convention (see project memory: project-labes-schema-decision):
+#   column_name: labes_ind<N>_<german_slug>   (e.g. labes_ind1_wald)
+#   sub-letter:  labes_ind<N><a/b>_<slug>     (e.g. labes_ind11a_veraenderung_fliessgewaesser)
+#   NEU:         labes_ind_neu<N>_<slug>      (e.g. labes_ind_neu2_abgeschiedenheit)
+#
+# join_method dispatch (handled by graph_pipeline/labes_joins.py):
+#   social_csv_municipality       — read LABES_Rep_2020.csv, aggregate by Gemnr,
+#                                   municipality-polygon join to manifest.
+#   polygon_municipality_field    — gpd.read_file(.gdb|.shp) for a municipality
+#                                   polygon layer, point-in-polygon at LV95.
+#   polygon_biogeoregion_field    — same idea, biogeoregion-level polygon source.
+#   polygon_cell_field            — fine polygon coverage (no admin-unit semantics).
+#   raster_point_sample           — rasterio open, sample value at each LV95 point.
+#   xlsx_biogeoregion_via_polygon — read a per-biogeoregion XLSX, biogeoregion
+#                                   polygon join.
+#   xlsx_municipality_via_polygon — same idea, municipality XLSX.
+#   xlsx_national_constant        — only a national scalar; emitted as constant
+#                                   column. Low signal; included for completeness.
+#   sample_based_biogeoregion     — indicator value derived from BAFU's monitoring
+#                                   samples; only biogeoregion aggregate published.
+#
+# granularity:
+#   raster_pixel        — true per-image variation
+#   polygon_cell        — fine polygon coverage; per-image variation
+#   municipality        — ~2,200 unique values across CH
+#   biogeoregion        — 6 unique values
+#   national            — 1 value (effectively constant)
+#
+# implementation_status: to_implement | implemented | validated | blocked
+# reference_values are extracted from the per-indicator Auswertungsprotokoll PDF
+# and filled in as each indicator is wired (latest BAFU report year).
+
+target_crs: EPSG:2056
+manifest_xy_columns: [lv95_easting, lv95_northing]
+manifest_key: global_index
+
+biogeoregion_keys:
+  jura: 1
+  mittelland: 2
+  alpennordflanke: 3
+  westliche_zentralalpen: 4
+  oestliche_zentralalpen: 5
+  alpensuedflanke: 6
+
+indicators:
+
+  # ============================================================
+  # PHYSICAL INDICATORS (BAFU numbered 1..36, plus NEU)
+  # ============================================================
+
+  - ind_id: "1"
+    column_name: labes_ind1_wald
+    category: physical
+    german_name: "Wald"
+    english_description: |
+      Forest area as percent of land surface, sampled at 100m (1 ha) from the
+      official BFS Arealstatistik point lattice (`ch.bfs.arealstatistik`,
+      EPSG:2056). Forest is classified as NOAS04 classes 50..57 (BAFU protocol).
+      Values are emitted as 0 or 100 (percent) per sampled point.
+    bafu_pdf: geodata/LABES/labes_1_wald/Auswertungsprotokoll_LABES_1_Wald.pdf
+    source:
+      kind: bfs_arealstatistik_point_csv
+      path: geodata/external/arealstatistik/arealstatistik_2056.csv.zip
+      easting_column: E_COORD
+      northing_column: N_COORD
+      class_column: AS_72
+      class_set: [50, 51, 52, 53, 54, 55, 56, 57]
+      grid_size_m: 100
+      value_scale: 100
+      note: "Official source resolved from geo.admin STAC item ch.bfs.arealstatistik/arealstatistik."
+    join_method: arealstatistik_point_sample
+    granularity: raster_pixel
+    value_unit: pct
+    value_range: [0, 100]
+    year_latest: 2018
+    reference_values:
+      national_mean: 29.5
+      biogeoregion_means:
+        jura: 44.3
+        mittelland: 23.1
+        alpennordflanke: 31.5
+        westliche_zentralalpen: 21.2
+        oestliche_zentralalpen: 22.5
+        alpensuedflanke: 47.4
+    implementation_status: implemented
+
+  - ind_id: "2"
+    column_name: labes_ind2_veraenderung_lw_flaeche
+    category: physical
+    german_name: "Veränderung Landwirtschaftsfläche"
+    english_description: "Change in agricultural land area per biogeoregion (Teilraum), comparing successive Arealstatistik survey periods."
+    bafu_pdf: geodata/LABES/labes_2_veraenderung_lw_flaeche/Auswertungsprotokoll_LABES_2_Veraenderung_LW_Flaeche.pdf
+    source:
+      kind: xlsx_biogeoregion
+      path: geodata/LABES/labes_2_veraenderung_lw_flaeche/LABES_2_Results/data_tab_1_1a_auswertungsprotokoll.xlsx
+      sheet: Tab 1
+      header_row: 0
+      teilraum_column: Teilraum
+      value_column: 2013/18
+    join_method: xlsx_biogeoregion_via_polygon
+    granularity: biogeoregion
+    value_unit: thousand_ha
+    value_range: [0, null]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means:
+        jura: 141.103
+        mittelland: 539.638
+        alpennordflanke: 199.231
+        westliche_zentralalpen: 26.017
+        oestliche_zentralalpen: 30.098
+        alpensuedflanke: 13.006
+    implementation_status: implemented
+
+  - ind_id: "2a"
+    column_name: labes_ind2a_nutzungsvielfalt_lw
+    category: physical
+    german_name: "Nutzungsvielfalt in der Landwirtschaftsfläche"
+    english_description: "Diversity of agricultural land use per municipality (number of distinct use categories, mean over hectare raster cells), 2018."
+    bafu_pdf: geodata/LABES/labes_2a_nutzungsvielfalt_in_der_lw_flaeche/Auswertungsprotokoll_LABES_2a_Nutzungsvielfalt_in_der_LW_Flaeche.pdf
+    source:
+      kind: shapefile_municipality
+      path: geodata/LABES/labes_2a_nutzungsvielfalt_in_der_lw_flaeche/LABES_2a_GIS/LABES_2a_Nutzungsvielfalt_in_der_LW_Flaeche_shapes/karte_lw_2018t.shp
+      bfs_column: bfs_nummer
+      value_column: DURCHSCHNI
+    join_method: polygon_municipality_field
+    granularity: municipality
+    value_unit: count
+    value_range: [0, null]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "3"
+    column_name: labes_ind3_flaechenverbrauch_siedlung
+    category: physical
+    german_name: "Flächenverbrauch Siedlung"
+    english_description: |
+      Settlement land use — per-pixel BINARY MASK (1=pixel is settlement,
+      0=not settlement) derived from BAFU's NOAS04 land-use code raster at
+      100m LV95. Settlement classes were calibrated empirically against
+      BAFU's published per-biogeoregion settlement-area totals (k_ha,
+      2004/09 Arealstatistik). Best-fit class set: NOAS04 codes
+      {11, 12, 13, 15, 16, 17}, agreement ±6.4% per biogeoregion. The
+      NOAS04 raster was extracted from labes_7_versiegelung/.../
+      LABES_7_Versiegelung_1318_raster_update via scripts/extract_labes_rasters.py
+      (subdataset is the NOAS04 land-use code input to BAFU's sealing
+      product). Calibration script: scripts/calibrate_noas04_classes.py.
+    bafu_pdf: geodata/LABES/labes_3_flaechenverbrauch_siedlung/Auswertungsprotokoll_LABES_3_Flaechenverbrauch_siedlung.pdf
+    source:
+      kind: geotiff_noas04_class_membership
+      path: geodata/external/labes_rasters/noas04_landuse_codes_lv95.tif
+      class_set: [11, 12, 13, 15, 16, 17]
+      calibration_note: "Empirically calibrated against BAFU per-biogeoregion 2009 totals; fit error ±6.4% per region."
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: binary_0_1
+    value_range: [0, 1]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means: # converted from k_ha to % area using bioregion totals
+        jura: 8.64
+        mittelland: 16.80
+        alpennordflanke: 7.39
+        westliche_zentralalpen: 2.68
+        oestliche_zentralalpen: 1.52
+        alpensuedflanke: 3.61
+    implementation_status: implemented
+
+  - ind_id: "4"
+    column_name: labes_ind4_verkehr_flaeche_laenge
+    category: physical
+    german_name: "Verkehr — Fläche und Länge"
+    english_description: "Distance in metres from each manifest point to the nearest transport infrastructure line (roads and railways), 2020. Source: TLM_Liniennetz_9a (combined road/rail network) from LABES 9."
+    bafu_pdf: geodata/LABES/labes_4_verkehrflaechelaenge/Auswertungsprotokoll_LABES_4_VerkehrFlaecheLaenge.pdf
+    source:
+      kind: gdb_line_features
+      path: geodata/LABES/labes_9_zerschneidung/LABES_9_GIS/LABES_9_Zerschneidung_2020.gdb
+      layer: TLM_Liniennetz_9a
+    join_method: nearest_feature_distance
+    granularity: nearest_feature
+    value_unit: m
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means_ha: # preserved as cross-reference for the original area publication
+        jura: 5961.575608
+        mittelland: 25889.092132
+        alpennordflanke: 8384.614481
+        westliche_zentralalpen: 2509.739984
+        oestliche_zentralalpen: 1713.706148
+        alpensuedflanke: 2743.088124
+    implementation_status: implemented
+
+  - ind_id: "7"
+    column_name: labes_ind7_versiegelung
+    category: physical
+    german_name: "Versiegelung"
+    english_description: |
+      Soil sealing (Versiegelung). Per-pixel BINARY MASK from BAFU's LABES 7
+      product: 1 = pixel is sealed, 0 = not sealed. BAFU derives this from the
+      Arealstatistik NOAS04 land-use codes (a sealed-class lookup table is
+      applied to each pixel; classes 1-12, 14-15, 19, etc. become 1, others
+      become 0). The same NOAS04 code raster is available as the *_update
+      subdataset in LV95. Per-biogeoregion total sealed area in ha is obtained
+      by summing 1-pixels (each pixel = 1 ha) and matches the figures in
+      LABES_7_Results.xlsx. Source raster: LABES_7_Versiegelung_1318_raster_r
+      (LV03, 100 m).
+    bafu_pdf: geodata/LABES/labes_7_versiegelung/Auswertungsprotokoll_LABES_7_Versiegelung.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind7_versiegelung_1318_lv03_mask.tif
+      source_gdb: geodata/LABES/labes_7_versiegelung/LABES_7_GIS/LABES_7_Versiegelung.gdb
+      source_subdataset: LABES_7_Versiegelung_1318_raster_r
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: binary_0_1
+    value_range: [0, 1]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means: # converted from hectares to % area using bioregion totals
+        jura: 4.95
+        mittelland: 9.85
+        alpennordflanke: 4.60
+        westliche_zentralalpen: 2.41
+        oestliche_zentralalpen: 2.28
+        alpensuedflanke: 2.02
+    implementation_status: implemented
+
+  - ind_id: "8"
+    column_name: labes_ind8_bauen_ausserhalb_bauzone
+    category: physical
+    german_name: "Bauen ausserhalb Bauzone"
+    english_description: "Density of buildings outside official zoning, measured as a 12.5 m × 12.5 m raster; the value at a pixel reflects local building dispersion outside building zones (Bauzonen). BAFU's canonical 'new calculation' protocol."
+    bafu_pdf: geodata/LABES/labes_8_bauen_ausserhalb_bauzone_neue_berechnung/Auswertungsprotokoll_LABES_8_Bauen_ausserhalb_Bauzone_neue_Berechnung.pdf
+    source:
+      kind: arcinfo_grid
+      path: geodata/LABES/labes_8_bauen_ausserhalb_bauzone_neue_berechnung/LABES_8_GIS/LABES_8_Bauen_ausserhalb_Bauzone_neue_Berechnung_grids/edr12_5_20i
+      crs_assumed: EPSG:2056   # confirm from .prj if present
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    coverage_null_threshold: 0.15
+    value_unit: index  # see PDF for exact units
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "9"
+    column_name: labes_ind9_zerschneidung
+    category: physical
+    german_name: "Zerschneidung (effektive Maschenweite)"
+    english_description: "Landscape fragmentation expressed as the effective mesh size (Meff, km²) per biogeoregion, 2020. Source: BAFU LABES 9a (with elevation-barrier above 2100 m). The first-row Meff value from each per-biogeoregion sheet of LABES_Zerschneidung_9a_corr.xlsx; values reproduce BAFU's published per-biogeoregion Meff exactly."
+    bafu_pdf: geodata/LABES/labes_9_zerschneidung/Auswertungsprotokoll_LABES_9_Zerschneidung.pdf
+    source:
+      kind: bafu_published_biogeoregion
+      path: geodata/LABES/labes_9_zerschneidung/LABES_9_Results/LABES_Zerschneidung_9a_corr.xlsx
+      note: "Meff per biogeoregion from sheets JURA_20, MITTELLAND_20, ALPENNORD_20, WESTALPEN_20, OSTALPEN_20, ALPENSUD_20 (first row, column 'meff '). National (SCHWEIZ_20) = 229.03 km²."
+    join_method: spec_biogeoregion_values
+    granularity: biogeoregion
+    value_unit: km2
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: 229.03
+      biogeoregion_means:
+        jura: 17.48
+        mittelland: 2.68
+        alpennordflanke: 332.69
+        westliche_zentralalpen: 255.13
+        oestliche_zentralalpen: 216.10
+        alpensuedflanke: 449.18
+    implementation_status: implemented
+
+  - ind_id: "11a"
+    column_name: labes_ind11a_veraenderung_fliessgewaesser
+    category: physical
+    german_name: "Veränderung Fliessgewässer"
+    english_description: "Change in flowing-waters character over time, derived from BAFU's sample-based monitoring (118 monitoring sites). Per-biogeoregion aggregate is the only spatially varying form published."
+    bafu_pdf: geodata/LABES/labes_11_gewaesser/Auswertungsprotokoll_LABES_11a_Veraenderung_Fliessgewaesser.pdf
+    source:
+      kind: xlsx_biogeoregion
+      path: geodata/LABES/labes_11_gewaesser/LABES_11_Results/LABES_11_Results.xlsx
+      sheet: diff FLIESS
+      cell: C5  # "Differenz" for BP 2015-2020, km/year
+    join_method: xlsx_national_constant
+    granularity: national
+    value_unit: km_per_year
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values: { national_mean: 21.5, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "11b"
+    column_name: labes_ind11b_veraenderung_stehende_gewaesser
+    category: physical
+    german_name: "Veränderung stehende Gewässer"
+    english_description: "Change in standing-waters character over time, BAFU sample-based monitoring."
+    bafu_pdf: geodata/LABES/labes_11_gewaesser/Auswertungsprotokoll_LABES_11b_Veraenderung_stehendeGewaesser.pdf
+    source:
+      kind: xlsx_biogeoregion
+      path: geodata/LABES/labes_11_gewaesser/LABES_11_Results/LABES_11_Results.xlsx
+      sheet: diff STEHENDE
+      cell: C5  # "Differenz" for BP 2015-2020, ha/year
+    join_method: xlsx_national_constant
+    granularity: national
+    value_unit: ha_per_year
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values: { national_mean: 0.6, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "14"
+    column_name: labes_ind14_licht
+    category: physical
+    german_name: "Lichtemissionen"
+    english_description: |
+      Night-light emissions per pixel. Uses BAFU's own LABES 14 VCMSL product
+      (VIIRS Composite Masked Stable Lights, DMSP-equivalent rescaling for
+      time-series continuity), extracted from the BAFU FileGDB at 1000m LV03.
+      An independent NOAA EOG 500m VIIRS DNB annual composite covering CH
+      (geodata/external/viirs_dnb_npp_2020_switzerland_wgs84.tif) is also
+      available as a higher-resolution cross-source; we prefer BAFU's product
+      here for academic alignment with the LABES 14 published statistics.
+    bafu_pdf: geodata/LABES/labes_14_licht/Auswertungsprotokoll_LABES_14_Licht.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind14_licht_2020_lv03_500m.tif
+      source_gdb: geodata/LABES/labes_14_licht/LABES_14_GIS/LABES_14_Licht_VCMSL.gdb
+      source_subdataset: VIIRS_500m_LV03_2020_mask
+      alternative_dmsp_rescaled: geodata/external/labes_rasters/labes_ind14_licht_2020_lv03_likeDMSP.tif
+      alternative_noaa_eog: geodata/external/viirs_dnb_npp_2020_switzerland_wgs84.tif
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: nW_cm2_sr
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "15"
+    column_name: labes_ind15_naturueberlassene_flaeche
+    category: physical
+    german_name: "Naturüberlassene Fläche"
+    english_description: |
+      Area left to natural development (alpine wilderness / nature-overlooked).
+      Per-pixel BINARY mask (0/1) at 1 ha LV95 from the BAFU FileGDB raster
+      `NOAS04_18_alpine_raster_recl_update`. Value 1 = pixel classified as
+      'naturüberlassen' under BAFU's NOAS04-2018 derivation. The biogeoregion
+      total in 1000 ha is also published in the LFI Auswertung_Waldwildnis.xlsx
+      for cross-reference.
+    bafu_pdf: geodata/LABES/labes_15_naturuberlasseneflache/Auswertungsprotokoll_LABES_15_NaturueberlasseneFlache.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind15_naturueberlassene_18_lv95.tif
+      source_gdb: geodata/LABES/labes_15_naturuberlasseneflache/LABES_15_GIS/LABES_15_NaturuberlasseneFlache.gdb
+      source_subdataset: NOAS04_18_alpine_raster_recl_update
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: binary_0_1
+    value_range: [0, 1]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means: # converted from k_ha to % area using bioregion totals
+        jura: 0.23
+        mittelland: 0.035
+        alpennordflanke: 3.07
+        westliche_zentralalpen: 2.63
+        oestliche_zentralalpen: 2.13
+        alpensuedflanke: 11.64
+    implementation_status: implemented
+
+  - ind_id: "17a"
+    column_name: labes_ind17a_soemmerungsweiden
+    category: physical
+    german_name: "Sömmerungsweiden"
+    english_description: |
+      Summer alpine pastures from the official BFS Arealstatistik point lattice
+      (`ch.bfs.arealstatistik`, EPSG:2056) at native 100m (1 ha) resolution.
+      Per BAFU protocol (indicator 17a), Sömmerungsweiden are NOAS04 72-category
+      classes 45..49 (Alpwiesen, günstige/verbuschte/versteinte Alp- und
+      Juraweiden, Schafalpen). Values are emitted as 0 or 100 per sampled point.
+    bafu_pdf: geodata/LABES/labes_17a_soemmerungsweiden/Auswertungsprotokoll_LABES_17a_Soemmerungsweiden.pdf
+    source:
+      kind: bfs_arealstatistik_point_csv
+      path: geodata/external/arealstatistik/arealstatistik_2056.csv.zip
+      easting_column: E_COORD
+      northing_column: N_COORD
+      class_column: AS_72
+      class_set: [45, 46, 47, 48, 49]
+      grid_size_m: 100
+      value_scale: 100
+      note: "BAFU 17a protocol uses Arealstatistik NOAS04 (72 categories), classes 45..49."
+    join_method: arealstatistik_point_sample
+    granularity: raster_pixel
+    value_unit: pct
+    value_range: [0, 100]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means: # converted from k_ha to % area using bioregion totals
+        jura: 10.06
+        mittelland: 0.059
+        alpennordflanke: 30.75
+        westliche_zentralalpen: 9.20
+        oestliche_zentralalpen: 20.83
+        alpensuedflanke: 6.24
+    implementation_status: implemented
+
+  - ind_id: "31a"
+    column_name: labes_ind31a_gewaesserabschnitte_frei_begehbar
+    category: physical
+    german_name: "Gewässerabschnitte frei begehbar"
+    english_description: |
+      Distance in metres from each manifest point to the nearest freely-walkable
+      water-edge segment (Bäche, Flüsse, See-Ufer). Source: 1,213,085 LineString
+      features in the BAFU LABES 31a shapefile gew_inreg_2020.shp. Per-point
+      true-distance gives finer signal than the biogeoregion km/km² density that
+      BAFU also publishes (those per-biogeoregion totals remain in
+      reference_values for cross-reference).
+    bafu_pdf: geodata/LABES/labes_31a_gewaesserabschnitte_frei_begehbar/Auswertungsprotokoll_LABES_31a_Gewaesserabschnitte_frei_begehbar.pdf
+    source:
+      kind: shapefile_line_features
+      path: geodata/LABES/labes_31a_gewaesserabschnitte_frei_begehbar/LABES_31a_GIS/LABES_31a_Gewaesserabschnitte_frei_begehbar_shapes/gew_inreg_2020.shp
+    join_method: nearest_feature_distance
+    granularity: nearest_feature
+    value_unit: m
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means_km_per_km2:  # FYI; per-biogeoregion published density (different unit)
+        jura: 0.872
+        mittelland: 1.789
+        alpennordflanke: 2.450
+        westliche_zentralalpen: 1.657
+        oestliche_zentralalpen: 2.000
+        alpensuedflanke: 2.212
+    implementation_status: implemented
+
+  - ind_id: "32"
+    column_name: labes_ind32_anlagefrei
+    category: physical
+    german_name: "Anlagefrei"
+    english_description: |
+      Per-pixel installation-density CLASS at 500m LV95 from BAFU LABES 32
+      classed raster (LABES_32_LV95_2020_classed). Values follow BAFU's
+      published 4-category classification: 1 = völlig anlagefrei (0%
+      installations), 2 = vereinzelte Anlagen (0.1-5%), 3 = wenige Anlagen
+      (5.1-10%), 4 = viele Anlagen (>10%). Per-biogeoregion shares of each
+      category are also published in LABES_32_Statistik.xlsx.
+    bafu_pdf: geodata/LABES/labes_32_anlagefrei/Auswertungsprotokoll_LABES_32_Anlagefrei.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind32_anlagefrei_2020_lv95_classed.tif
+      source_gdb: geodata/LABES/labes_32_anlagefrei/LABES_32_GIS/LABES_32_Anlagefreie_2020.gdb
+      source_subdataset: LABES_32_LV95_2020_classed
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: anlagen_class_1to4
+    value_range: [0, 4]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means_pct_voellig_anlagefrei:
+        jura: 0.047
+        mittelland: 0.003
+        alpennordflanke: 7.209
+        westliche_zentralalpen: 6.386
+        oestliche_zentralalpen: 8.073
+        alpensuedflanke: 3.822
+    implementation_status: implemented
+
+  - ind_id: "35"
+    column_name: labes_ind35_erschliessung_fuss_wanderwege
+    category: physical
+    german_name: "Erschliessung Fuss-/Wanderwege"
+    english_description: "Density of pedestrian and hiking-path access, per 42,409 polygon cells covering CH, 2020."
+    bafu_pdf: geodata/LABES/labes_35_erschliessungfusswanderwege/Auswertungsprotokoll_LABES_35_ErschliessungFussWanderwege.pdf
+    source:
+      kind: gdb_layer
+      path: geodata/LABES/labes_35_erschliessungfusswanderwege/LABES_35_GIS/LABES_35_Wege.gdb
+      layer: LABES_35_Density2020
+      value_column: SUM_Shape_Length
+    join_method: polygon_cell_field
+    granularity: polygon_cell
+    coverage_null_threshold: 0.20
+    value_unit: m_per_km2
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "36"
+    column_name: labes_ind36_zersiedlung_wup
+    category: physical
+    german_name: "Zersiedlung (gewichtete Zersiedelung WUP)"
+    english_description: "Urban sprawl, expressed as weighted urban permeation (WUP), per municipality, 2018."
+    bafu_pdf: geodata/LABES/labes_36_zersiedlung/Auswertungsprotokoll_LABES_36_Zersiedlung.pdf
+    source:
+      kind: gdb_layer
+      path: geodata/LABES/labes_36_zersiedlung/LABES_36_GIS/LABES_36_Zersiedlung_2018.gdb
+      layer: Zersiedlung_2018_Gemeinde
+      bfs_column: bfs_nummer
+      value_column: WUP
+    join_method: polygon_municipality_field
+    granularity: municipality
+    value_unit: WUP
+    value_range: [0, null]
+    year_latest: 2018
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "neu_2"
+    column_name: labes_ind_neu2_abgeschiedenheit
+    category: physical
+    german_name: "Abgeschiedenheit"
+    english_description: |
+      Remoteness — path-distance in MINUTES from each location to the nearest
+      settlement (>15 inhabitants). BAFU computes this as a cost-surface path
+      distance on a 1 ha raster using TLM3D, DHM50, STATPOP and Arealstatistik
+      NOAS04. Per-pixel raster values are extracted directly from
+      `LABES_NEU_2_distance_2020_mins` inside the BAFU File Geodatabase
+      (requires GDAL ≥ 3.7 with OpenFileGDB raster support; we install
+      `osgeo.gdal` via conda-forge and extract to a standalone GeoTIFF via
+      `scripts/extract_labes_rasters.py`).
+    bafu_pdf: geodata/LABES/labes_neu_2_abgeschiedenheit/Auswertungsprotokoll_LABES_NEU_2_Abgeschiedenheit.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind_neu2_abgeschiedenheit_2020_lv95.tif
+      source_gdb: geodata/LABES/labes_neu_2_abgeschiedenheit/LABES_NEU_2_GIS/LABES_NEU_2_Abgeschiedenheit.gdb
+      source_subdataset: LABES_NEU_2_distance_2020_mins
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: minutes
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: 50.59
+      biogeoregion_means:
+        jura: 8.11
+        mittelland: 3.12
+        alpennordflanke: 44.91
+        westliche_zentralalpen: 119.09
+        oestliche_zentralalpen: 71.32
+        alpensuedflanke: 56.97
+    implementation_status: implemented
+
+  - ind_id: "neu_7"
+    column_name: labes_ind_neu7_leitungen
+    category: physical
+    german_name: "Leitungen (Hochspannungs- und Bahnstromleitungen)"
+    english_description: |
+      Distance in metres from each manifest point to the nearest power /
+      overhead railway-power line. Source: TLM_VERSORGUNGS_BAUTE_LIN_2020 in
+      the BAFU LABES NEU_7 FileGDB (1,027 line features, MultiLineString LV95).
+      The per-biogeoregion total line length (km) BAFU publishes is also
+      preserved here as cross-reference under reference_values.
+    bafu_pdf: geodata/LABES/labes_neu_7_leitungen/Auswertungsprotokoll_LABES_NEU_7_Leitungen.pdf
+    source:
+      kind: gdb_line_features
+      path: geodata/LABES/labes_neu_7_leitungen/LABES_NEU_7_GIS/LABES_NEU_7_Leitungen.gdb
+      layer: TLM_VERSORGUNGS_BAUTE_LIN_2020
+    join_method: nearest_feature_distance
+    granularity: nearest_feature
+    value_unit: m
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means_km_total:
+        jura: 443.29
+        mittelland: 1827.26
+        alpennordflanke: 1231.71
+        westliche_zentralalpen: 707.11
+        oestliche_zentralalpen: 498.63
+        alpensuedflanke: 513.96
+    implementation_status: implemented
+
+  - ind_id: "neu_9"
+    column_name: labes_ind_neu9_windanlagen
+    category: physical
+    german_name: "Windanlagen (Potenzialgebiete)"
+    english_description: "Distance in metres from each manifest point to the nearest operational wind turbine in the shipped LABES_NEU_9 wind-installation geodatabase."
+    bafu_pdf: geodata/LABES/labes_neu_9_windanlagen/Auswertungsprotokoll_LABES_NEU_9_Windanlagen.pdf
+    source:
+      kind: gdb_nearest_feature
+      path: geodata/LABES/labes_neu_9_windanlagen/LABES_NEU_9_GIS/LABES_NEU_9_Wind.gdb
+      layer: Wind_Turbine
+      filter_column: operationalStatus
+      filter_values:
+        - operationalStatus_normalbetrieb
+    join_method: nearest_feature_distance
+    granularity: nearest_feature
+    value_unit: m
+    value_range: [0, null]
+    year_latest: 2020
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "neu_12"
+    column_name: labes_ind_neu12_landwirtschaftliche_intensitaet
+    category: physical
+    german_name: "Landwirtschaftliche Intensität"
+    english_description: |
+      Agricultural intensity index (LWI), per-pixel raster at 10 m LV03 from
+      BAFU FileGDB subdataset LABES_LWI_2016_2019_new_std (standardised LWI for
+      2016-2019). Higher values = more intensive agricultural land use. Pixels
+      outside agricultural land (urban, forest, alpine rock/glacier) return
+      low/baseline values. Biogeoregion-level summary of total intensiv-genutzt
+      cells is also published in ZonalStats_LWI_20162019_classed.xlsx for
+      cross-reference.
+    bafu_pdf: geodata/LABES/labes_neu_12_landwirtschaftliche_intensitaet/Auswertungsprotokoll_LABES_NEU_12_LandwirtschaftlicheIntensitat.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind_neu12_lwi_2019_lv95.tif
+      source_gdb: geodata/LABES/labes_neu_12_landwirtschaftliche_intensitaet/LABES_NEU_12_GIS/LABES_NEU_12_LWI.gdb
+      source_subdataset: LABES_LWI_2016_2019_new_std
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: lwi_index
+    value_range: [0, null]
+    year_latest: 2019
+    reference_values:
+      national_mean: null
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "neu_14"
+    column_name: labes_ind_neu14_staedtisches_gruen
+    category: physical
+    german_name: "Städtisches Grün"
+    english_description: |
+      Urban greenness — NDVI 2020 raster at 10 m LV03 from BAFU FileGDB
+      subdataset NDVI_2020. Raster values are scaled NDVI ×10000 (Landsat
+      integer encoding); we divide by 10000 here so the column carries
+      standard NDVI in [-1, +1]. Pixels outside the BAFU urban-analysis mask
+      return nodata. Per-biogeoregion summed-green-area (km²) is also
+      published in _SiedBio_TOT_18 sheet for cross-reference.
+    bafu_pdf: geodata/LABES/labes_neu_14_staedtischesgruen/Auswertungsprotokoll_LABES_NEU_14_StadtischesGrun.pdf
+    source:
+      kind: geotiff_extracted_from_gdb
+      path: geodata/external/labes_rasters/labes_ind_neu14_ndvi_2020_lv95.tif
+      source_gdb: geodata/LABES/labes_neu_14_staedtischesgruen/LABES_NEU_14_GIS/LABES_NEU_14_StadtischesGrun.gdb
+      source_subdataset: NDVI_2020
+      value_scale: 1.0e-4  # raster integer NDVI ×10000 → standard NDVI
+    join_method: raster_point_sample
+    granularity: raster_pixel
+    value_unit: ndvi
+    value_range: [-1.0, 1.0]
+    year_latest: 2020
+    reference_values:
+      national_mean: 1978.0
+      biogeoregion_means:
+        jura: 215.87
+        mittelland: 1136.18
+        alpennordflanke: 327.63
+        westliche_zentralalpen: 112.69
+        oestliche_zentralalpen: 52.31
+        alpensuedflanke: 133.28
+    implementation_status: implemented
+
+  # ============================================================
+  # PERCEPTION INDICATORS — survey CSV (LABES_Rep_2020), municipality join
+  # ============================================================
+
+  - ind_id: "23"
+    column_name: labes_ind23_ortsbindung
+    category: perception
+    german_name: "Ortsbindung"
+    english_description: "Place attachment to the residential municipality (1=trifft überhaupt nicht zu .. 5=trifft völlig zu)."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_23_Ortsbindung.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Ortsbindung
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # survey PDF mean is respondent-weighted; manifest runs are location-weighted
+      national_mean: 3.66
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "24"
+    column_name: labes_ind24_landschaftsschoenheit
+    category: perception
+    german_name: "Landschaftsschönheit"
+    english_description: "Perceived landscape beauty in the residential municipality, mean of two Likert items, 1-5."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_24_Landschaftsschoenheit.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Schönheit
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # survey PDF means are respondent-weighted; manifest bioregion means are not directly comparable on limited runs
+      national_mean: 4.16
+      biogeoregion_means:
+        jura: 4.22
+        mittelland: 4.12
+        alpennordflanke: 4.34
+        westliche_zentralalpen: 4.34
+        oestliche_zentralalpen: 4.66
+        alpensuedflanke: 4.09
+    implementation_status: implemented
+
+  - ind_id: "25"
+    column_name: labes_ind25_besonderheit
+    category: perception
+    german_name: "Besonderheit"
+    english_description: "Perceived uniqueness/distinctiveness of the local landscape, 1-5 Likert."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_25_Besonderheit.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Besonderheit
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # PDF reports the 2020 national Eigenart/Besonderheit scalar used by this CSV column
+      national_mean: 3.63
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "27"
+    column_name: labes_ind27_informationsgehalt
+    category: perception
+    german_name: "Informationsgehalt"
+    english_description: "Information content (composite of coherence, complexity, legibility — confirm exact composition from PDF)."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_27_Informationsgehalt.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_columns:
+        - Indikator_Kohärenz
+        - Indikator_Komplexität
+        - Indikator_Lesbarkeit
+      aggregation: municipality_mean_then_average  # confirm composition
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "29"
+    column_name: labes_ind29_faszination
+    category: perception
+    german_name: "Faszination"
+    english_description: "Perceived fascination of the landscape, 1-5 Likert."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_29_Faszination.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Faszination
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # survey PDF mean is respondent-weighted; manifest runs are location-weighted
+      national_mean: 3.76
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "30"
+    column_name: labes_ind30_authentizitaet
+    category: perception
+    german_name: "Authentizität"
+    english_description: "Perceived authenticity of the landscape, 1-5 Likert."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_30_Authentizitaet.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Authentizität
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # survey PDF mean is respondent-weighted; manifest runs are location-weighted
+      national_mean: 3.99
+      biogeoregion_means: null
+    implementation_status: implemented
+
+  - ind_id: "neu_16"
+    column_name: labes_ind_neu16_erholungsnutzung
+    category: perception
+    german_name: "Erholungsnutzung"
+    english_description: "Recreational use of the local landscape, composite of Erholungsindex_* sub-indices across landscape types (forest, water, hills, parks, agriculture). Confirm composition from PDF."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_16_Erholungsnutzung.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_columns:
+        - Erholungsindex_Landwirtschaft
+        - Erholungsindex_Pärke
+        - Erholungsindex_Wald
+        - Erholungsindex_Gewässer
+        - Erholungsindex_Hügel
+      aggregation: municipality_mean_then_average
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index
+    value_range: [0.0, 5.0]
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "neu_17"
+    column_name: labes_ind_neu17_landschaftscharakter
+    category: perception
+    german_name: "Landschaftscharakter"
+    english_description: "Perceived landscape character — BAFU defines this as a 20-element vector per municipality (share of respondents marking each element as 'typical': Bäche/Seen/Wälder/Wiesen/.../Wohnquartiere). To preserve information downstream, this column emits a pipe-delimited list of element slugs that >50% of respondents in the municipality flagged as typical (biogeoregion-level majority fallback when a municipality has no respondents). This is a project-specific compression of BAFU's vector parameter; BAFU itself does NOT publish a scalar index here."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_17_Landschaftscharakter.pdf
+    source:
+      kind: social_csv_vector
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      majority_threshold: 0.5
+      element_map:
+        f30001: baeche_fluesse
+        f30002: seen_weiher
+        f30003: paerke_gruenanlagen
+        f30004: wiesen_aecker_felder
+        f30005: wald
+        f30006: industrie_gewerbe
+        f30007: rebberge
+        f30008: historischer_dorfkern
+        f30009: berge_taeler
+        f30010: hochspannungsmasten
+        f30011: windenergie
+        f30012: solarenergie
+        f30013: moore
+        f30014: bauernhoefe_staelle
+        f30015: burg_schloss
+        f30016: streusiedlungen
+        f30017: naturschutzgebiet
+        f30018: flugplatz
+        f30019: hochhaeuser
+        f30020: wohnquartiere
+    join_method: social_csv_vector_to_string
+    granularity: municipality
+    value_unit: pipe_delimited_slugs
+    value_range: null
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "neu_18"
+    column_name: labes_ind_neu18_landschaftsveraenderung
+    category: perception
+    german_name: "Landschaftsveränderung"
+    english_description: "Perceived landscape change. BAFU explicitly chose NOT to publish a composite scalar index ('Wir sehen von einer Bildung eines gemittelten Index ab'); instead it publishes per-statement means of 19 individual change statements. To preserve information downstream, this column emits a pipe-delimited list of change-statement slugs that >50% of respondents in the municipality reported as noticed (biogeoregion-level majority fallback when no respondents in municipality). This is a project-specific compression of BAFU's per-statement parameter."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_18_Landschaftsveraenderung.pdf
+    source:
+      kind: social_csv_vector
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      majority_threshold: 0.5
+      binarize_rule: likert_ge4
+      element_map:
+        f70001: wohngebiete_neu
+        f70002: industrie_gewerbe_neu
+        f70003: strassen_neu
+        f70004: wege_asphaltiert
+        f70005: solaranlagen_neu
+        f70006: windkraftwerke_neu
+        f70007: wasserkraftwerke_neu
+        f70008: siedlung_dichter
+        f70009: gruenflaechen_verloren
+        f70010: siedlung_ausgebreitet
+        f70011: fliessgewaesser_renaturiert
+        f70012: fliessgewaesser_eingedolt
+        f70013: gewaesser_zugaenglicher
+        f70014: lw_eintoeniger
+        f70015: lw_vielfaeltiger
+        f70016: waldflaeche_zugenommen
+        f70017: traditionelle_strukturen_verloren
+        f70018: weniger_sterne_sichtbar
+        f70019: naturnahe_erholung_zugaenglicher
+    join_method: social_csv_vector_to_string
+    granularity: municipality
+    value_unit: pipe_delimited_slugs
+    value_range: null
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "neu_20"
+    column_name: labes_ind_neu20_grundnutzungen
+    category: perception
+    german_name: "Grundnutzungen (Qualität der Grundnutzungen)"
+    english_description: "Perceived quality of the four base land uses (settlement, agriculture, water, forest); typically a mean of the four sub-indicators. Confirm composition from PDF."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_20_Grundnutzungen.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_columns:
+        - Indikator_Qualität_Siedlungsfläche
+        - Indikator_Qualität_Landwirtschaftsfläche
+        - Indikator_Qualität_Gewässer
+        - Indikator_Qualität_Wald
+      aggregation: municipality_mean_then_average
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented
+
+  - ind_id: "neu_22"
+    column_name: labes_ind_neu22_gesamturteil
+    category: perception
+    german_name: "Gesamturteil wahrgenommene Landschaftsqualität"
+    english_description: "Overall perceived landscape quality, 0-10 scale (0=sehr schlecht/gar nicht zufrieden, 10=sehr gut/sehr zufrieden). Mean of three items: (1) state of landscape, (2) satisfaction with landscape, (3) ability to recreate in landscape."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_22_Gesamturteil.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_Gesamturteil
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_0_10
+    value_range: [0.0, 10.0]
+    year_latest: 2020
+    reference_values:
+      comparison_scope: national_only  # survey PDF means are respondent-weighted; manifest bioregion means are not directly comparable on limited runs
+      national_mean: 8.02
+      biogeoregion_means:
+        jura: 8.05
+        mittelland: 7.96
+        alpennordflanke: 8.37
+        westliche_zentralalpen: 8.20
+        oestliche_zentralalpen: 9.02
+        alpensuedflanke: 7.85
+    implementation_status: implemented
+
+  - ind_id: "neu_23"
+    column_name: labes_ind_neu23_kulturelle_landschaftswerte
+    category: perception
+    german_name: "Kulturelle Landschaftswerte"
+    english_description: "Perceived cultural landscape values, 1-5 Likert."
+    bafu_pdf: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/Auswertungsprotokoll_LABES_NEU_23_Kulturelle_Landschaftswerte.pdf
+    source:
+      kind: social_csv
+      path: geodata/LABES/labes_all_social_indicators_23_24_25_27_29_30_neu16_neu17_neu18_neu20_neu22_neu23/LABES_Rep_2020.csv
+      gemnr_column: Gemnr
+      value_column: Indikator_KulturelleLandschaftswerte
+      aggregation: municipality_mean
+      coverage_fallback: biogeoregion_mean
+    join_method: social_csv_municipality
+    granularity: municipality
+    value_unit: index_1_5
+    value_range: [1.0, 5.0]
+    year_latest: 2020
+    reference_values: { national_mean: null, biogeoregion_means: null }
+    implementation_status: implemented

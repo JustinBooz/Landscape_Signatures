@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swiss Landscape Signatures — DINOv3 7B Typologies</title>
+    <meta name="description" content="Interactive exploration of 3.2 million Swiss landscape signatures extracted with DINOv3 ViT-7B16 and clustered via HDBSCAN.">
+    
+    <!-- Deck.gl -->
+    <script src="https://unpkg.com/deck.gl@8.9.0/dist.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading 3.2M landscape signatures…</div>
+        <div class="loading-progress" id="loading-progress">Fetching binary data…</div>
+    </div>
+
+    <div id="map"></div>
+    
+    <div id="ui-panel">
+        <div class="panel-header">
+            <div class="badge">DINOv3 ViT-7B16 · Zero-Shot</div>
+            <h1>Swiss Landscape Signatures</h1>
+            <p class="subtitle">3,205,436 images clustered into multi-resolution typologies via HDBSCAN on 4096D embeddings.</p>
+        </div>
+        
+        <div id="stats">
+            <div class="stat-card">
+                <div class="value" id="stat-points">—</div>
+                <div class="label">Total Points</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-clusters">—</div>
+                <div class="label">Clusters</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-noise">—</div>
+                <div class="label">Noise %</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="stat-visible">—</div>
+                <div class="label">Visible</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="space-select">Projection Space</label>
+                <select id="space-select">
+                    <option value="geo" selected>📍 Geographic (EPSG:2056)</option>
+                    <option value="umap">🧠 UMAP Embedding Space</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="color-select">Typology Resolution</label>
+                <select id="color-select">
+                    <option value="micro">Micro (9,807 clusters)</option>
+                    <option value="meso" selected>Meso (641 clusters)</option>
+                    <option value="macro">Macro (241 clusters)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="inspector">
+            <h3>Image Inspector</h3>
+            <p id="inspector-hint">Click any point to inspect its landscape image.</p>
+            <div class="img-container">
+                <div id="loader" class="hidden"></div>
+                <img id="inspected-img" src="" alt="Selected landscape" style="display: none;">
+            </div>
+            <div id="meta-display"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+reference_configuration:
+  pca_dim: 256
+  k: 100
+  graph_type: snn_jaccard
+  resolution: 1.0
+  seed: 0
+
+candidate_signature_thresholds:
+  seed_stability_min: 0.70         # mean best-match Jaccard across seeds
+  k_stability_min: 0.60            # mean across k ∈ {50, 200}
+  graph_stability_min: 0.60        # mean across {mutual_knn, mutual_snn_jaccard}
+  resolution_stability_min: 0.50   # mean across adjacent resolutions
+  spatial_coherence_min: TBD       # set after s13 null calibration
+  geodata_purity_min: TBD          # set after s13 null calibration
+  negative_control_p_max: 0.01
+
+scope_caveat: |
+  These criteria establish robustness conditional on the DINOv3 embedding.
+  They do not validate the embedding itself against human perceptual structure.
+  That validation is performed in WP2 (gaze tracking).

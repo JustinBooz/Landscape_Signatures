@@ -1,0 +1,37 @@
+# Master hyperparameters — MAE Landscape Signatures
+
+project_name: "baukultur_mae"
+
+data:
+  output_shards_dir: "/home/jubooz/landscape_signatures/baukultur_vpr/data/shards"
+  imagenet_mean: [0.485, 0.456, 0.406]
+  imagenet_std:  [0.229, 0.224, 0.225]
+
+model:
+  image_size: 518
+  patch_size: 14                              # 518/14 = 37 patches per side → 1369 total
+  encoder:
+    embed_dim: 1024                           # ViT-Large hidden dim
+    depth: 24                                 # ViT-Large blocks
+    num_heads: 16
+  decoder:
+    embed_dim: 512
+    depth: 8
+    num_heads: 16
+  mask_ratio: 0.75                            # 75% masked → 342 visible, 1027 masked
+
+training:
+  batch_size: 64                              # Physical micro-batch
+  gradient_accumulation_steps: 16             # Effective batch = 64 × 16 = 1024
+  base_lr: 1.5e-4                             # Scaled: 1.5e-4 * (1024/256) = 6.0e-4
+  weight_decay: 0.05
+  num_epochs: 200
+  warmup_epochs: 40
+  num_workers: 8
+  gradient_clip: 1.0
+  shuffle_buffer: 2500
+
+wandb:
+  project: "baukultur_mae"
+  entity: null
+  offline: false

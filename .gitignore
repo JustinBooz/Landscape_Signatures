@@ -1,0 +1,25 @@
+# Data & Large Files
+data/
+geodata/
+training_data_7b/
+graph_pipeline/outputs/
+models/weights/
+samples/
+
+# Binaries & Memmaps
+*.mmap
+*.npy
+*.pkl
+*.pth
+*.h5
+
+# Logs & Temp
+*.log
+logs/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+
+# Virtual Environments
+venv/
+.env/

@@ -1,0 +1,192 @@
+# Hold-out landmark reference points for the LABES rigor checks (#3).
+# 25 reference points spanning the six biogeographic regions of Switzerland.
+# Each landmark has an expected qualitative outcome on selected indicators that we
+# can validate against (e.g., Zürich HB should have high settlement %, near-zero
+# forest %, high light emissions; Aletschgletscher should have near-zero settlement
+# and very low remoteness-accessibility).
+#
+# Coordinates in EPSG:4326 (lon,lat); enrichment uses EPSG:2056 LV95 internally.
+
+landmarks:
+
+  # --- Mittelland (urban cores + agricultural plateau) ---
+  - id: zurich_hb
+    name: "Zürich Hauptbahnhof"
+    biogeoregion: mittelland
+    lon: 8.5403
+    lat: 47.3779
+    expectations:
+      labes_ind36_zersiedlung_wup: ">national_mean"
+      labes_ind14_licht: ">national_p90"
+      labes_ind_neu2_abgeschiedenheit: "<10"
+      labes_ind24_landschaftsschoenheit: "<4.10"
+
+  - id: bern_zentrum
+    name: "Bundesplatz Bern"
+    biogeoregion: mittelland
+    lon: 7.4446
+    lat: 46.9466
+
+  - id: lausanne_centre
+    name: "Lausanne — Place St-François"
+    biogeoregion: mittelland
+    lon: 6.6323
+    lat: 46.5197
+
+  - id: basel_marktplatz
+    name: "Basel Marktplatz"
+    biogeoregion: mittelland
+    lon: 7.5886
+    lat: 47.5596
+
+  - id: emmental_ridge
+    name: "Emmental — Lüderenalp"
+    biogeoregion: mittelland
+    lon: 7.8092
+    lat: 47.0103
+    expectations:
+      labes_ind1_wald: ">national_mean"
+      labes_ind2a_nutzungsvielfalt_lw: ">national_median"
+      labes_ind_neu2_abgeschiedenheit: ">20"
+
+  - id: seeland_ag
+    name: "Seeland — agricultural plateau near Kerzers"
+    biogeoregion: mittelland
+    lon: 7.1996
+    lat: 46.9836
+
+  # --- Jura ---
+  - id: chasseral_ridge
+    name: "Chasseral summit"
+    biogeoregion: jura
+    lon: 7.0570
+    lat: 47.1316
+
+  - id: vallorbe_forest
+    name: "Vallorbe — Forêts du Jura"
+    biogeoregion: jura
+    lon: 6.3792
+    lat: 46.7128
+    expectations:
+      labes_ind1_wald: ">national_mean"
+
+  - id: porrentruy_centre
+    name: "Porrentruy town centre"
+    biogeoregion: jura
+    lon: 7.0759
+    lat: 47.4156
+
+  # --- Alpennordflanke ---
+  - id: interlaken
+    name: "Interlaken West station"
+    biogeoregion: alpennordflanke
+    lon: 7.8528
+    lat: 46.6839
+
+  - id: kandersteg_oeschinen
+    name: "Oeschinensee shore"
+    biogeoregion: alpennordflanke
+    lon: 7.7273
+    lat: 46.4945
+    expectations:
+      labes_ind_neu2_abgeschiedenheit: ">40"
+      labes_ind14_licht: "<national_p10"
+
+  - id: titlis_summit
+    name: "Titlis summit (3,238 m)"
+    biogeoregion: alpennordflanke
+    lon: 8.4374
+    lat: 46.7707
+    expectations:
+      labes_ind_neu2_abgeschiedenheit: ">120"
+      labes_ind14_licht: "<national_p5"
+
+  - id: pilatus_summit
+    name: "Pilatus Kulm"
+    biogeoregion: alpennordflanke
+    lon: 8.2533
+    lat: 46.9787
+
+  # --- Westliche Zentralalpen ---
+  - id: aletschgletscher
+    name: "Konkordiaplatz on Aletschgletscher"
+    biogeoregion: westliche_zentralalpen
+    lon: 8.0383
+    lat: 46.4938
+    expectations:
+      labes_ind1_wald: "<5"
+      labes_ind3_flaechenverbrauch_siedlung: "<1"
+      labes_ind_neu2_abgeschiedenheit: ">240"
+      labes_ind14_licht: "<national_p5"
+
+  - id: matterhorn
+    name: "Matterhorn summit ridge"
+    biogeoregion: westliche_zentralalpen
+    lon: 7.6586
+    lat: 45.9763
+
+  - id: sion_centre
+    name: "Sion Sittenburg"
+    biogeoregion: westliche_zentralalpen
+    lon: 7.3601
+    lat: 46.2334
+
+  - id: leuk_vineyard
+    name: "Leuk Rebberg"
+    biogeoregion: westliche_zentralalpen
+    lon: 7.6276
+    lat: 46.3174
+
+  # --- Östliche Zentralalpen ---
+  - id: zermatt_centre
+    name: "Zermatt centre"
+    biogeoregion: westliche_zentralalpen
+    lon: 7.7491
+    lat: 46.0207
+
+  - id: stmoritz_centre
+    name: "St. Moritz Dorf"
+    biogeoregion: oestliche_zentralalpen
+    lon: 9.8389
+    lat: 46.4983
+
+  - id: davos_centre
+    name: "Davos Platz"
+    biogeoregion: oestliche_zentralalpen
+    lon: 9.8351
+    lat: 46.7990
+
+  - id: bernina_pass
+    name: "Bernina Pass"
+    biogeoregion: oestliche_zentralalpen
+    lon: 10.0260
+    lat: 46.4099
+
+  - id: scuol_engadin
+    name: "Scuol — Lower Engadin valley"
+    biogeoregion: oestliche_zentralalpen
+    lon: 10.3007
+    lat: 46.7951
+    expectations:
+      labes_ind24_landschaftsschoenheit: ">4.50"  # PDF: Östl. ZA region mean 4.66, highest of any biogeoregion
+
+  # --- Alpensüdflanke ---
+  - id: lugano_centre
+    name: "Lugano Piazza della Riforma"
+    biogeoregion: alpensuedflanke
+    lon: 8.9511
+    lat: 46.0050
+
+  - id: bellinzona_castello
+    name: "Bellinzona Castelgrande"
+    biogeoregion: alpensuedflanke
+    lon: 9.0214
+    lat: 46.1933
+
+  - id: valle_maggia
+    name: "Valle Maggia — Cevio"
+    biogeoregion: alpensuedflanke
+    lon: 8.6024
+    lat: 46.3169
+    expectations:
+      labes_ind24_landschaftsschoenheit: "<4.20"  # PDF: Alpensüdflanke mean 4.09 (lowest of any biogeoregion)
